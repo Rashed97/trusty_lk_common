@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved
  * Copyright (c) 2008 Travis Geiselbrecht
  *
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -45,3 +46,10 @@ __WEAK void platform_quiesce(void)
 {
 }
 
+__WEAK void platform_app_bootloader_epilog(void)
+{
+}
+
+__WEAK void platform_bootstrap_epilog(void)
+{
+}

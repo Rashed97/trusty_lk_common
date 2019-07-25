@@ -32,8 +32,16 @@ struct fault_handler_table_entry {
     uint64_t fault_handler;
 };
 
+#ifndef HAVE_STACKTRACE
+#define HAVE_STACKTRACE 1
+#endif
+
 extern struct fault_handler_table_entry __fault_handler_table_start[];
 extern struct fault_handler_table_entry __fault_handler_table_end[];
+
+#if HAVE_STACKTRACE
+void arm64_print_stacktrace(struct arm64_iframe_long *iframe);
+#endif
 
 static void dump_iframe(const struct arm64_iframe_long *iframe)
 {
@@ -82,6 +90,14 @@ void arm64_sync_exception(struct arm64_iframe_long *iframe)
     }
 
     printf("sync_exception\n");
+
+#if HAVE_STACKTRACE
+    printf("-----------------------------------------------\n");
+    printf(" [Stack Trace]\n\n");
+    arm64_print_stacktrace(iframe);
+    printf("-----------------------------------------------\n");
+#endif
+
     dump_iframe(iframe);
 
     printf("ESR 0x%x: ec 0x%x, il 0x%x, iss 0x%x\n", esr, ec, il, iss);

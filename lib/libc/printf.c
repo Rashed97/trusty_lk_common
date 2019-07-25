@@ -217,15 +217,15 @@ __NO_INLINE static char *double_to_string(char *buf, size_t len, double d, uint 
 			/* start by walking backwards through the string */
 #define OUTREV(c) do { if (&buf[pos] == buf) goto done; else buf[--pos] = (c); } while (0)
 			pos = len;
+			size_t decimal_spot = pos;
+			uint64_t u;
 			OUTREV(0);
 
 			/* reserve space for the fractional component first */
 			for (int i = 0; i <= 6; i++)
 				OUTREV('0');
-			size_t decimal_spot = pos;
 
 			/* print the integer portion */
-			uint64_t u;
 			if (exponent_signed >= 0) {
 				u = fraction;
 				u |= (1ULL<<52);
@@ -242,16 +242,18 @@ __NO_INLINE static char *double_to_string(char *buf, size_t len, double d, uint 
 
 			buf[decimal_spot] = '.';
 
-			/* handle the fractional part */
-			uint32_t frac = ((d - u) * 1000000) + .5;
+			{
+				/* handle the fractional part */
+				uint32_t frac = ((d - u) * 1000000) + .5;
 
-			uint i = decimal_spot + 6 + 1;
-			while (frac != 0) {
-				uint digit = frac % 10;
+				uint i = decimal_spot + 6 + 1;
+				while (frac != 0) {
+					uint digit = frac % 10;
 
-				buf[--i] = digit + '0';
+					buf[--i] = digit + '0';
 
-				frac /= 10;
+					frac /= 10;
+				}
 			}
 
 			if (neg)

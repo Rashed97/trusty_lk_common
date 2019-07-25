@@ -36,9 +36,6 @@ static mutex_t vmm_lock = MUTEX_INITIAL_VALUE(vmm_lock);
 
 vmm_aspace_t _kernel_aspace;
 
-static void dump_aspace(const vmm_aspace_t *a);
-static void dump_region(const vmm_region_t *r);
-
 void vmm_init(void)
 {
     /* initialize the kernel address space */
@@ -343,6 +340,9 @@ status_t vmm_reserve_space(vmm_aspace_t *aspace, const char *name, size_t size, 
 status_t vmm_alloc_physical(vmm_aspace_t *aspace, const char *name, size_t size, void **ptr, uint8_t align_log2, paddr_t paddr, uint vmm_flags, uint arch_mmu_flags)
 {
     status_t ret;
+    vaddr_t vaddr = 0;
+    vmm_region_t *r = NULL;
+    int err = 0;
 
     LTRACEF("aspace %p name '%s' size 0x%zx ptr %p paddr 0x%lx vmm_flags 0x%x arch_mmu_flags 0x%x\n",
             aspace, name, size, ptr ? *ptr : 0, paddr, vmm_flags, arch_mmu_flags);
@@ -361,8 +361,6 @@ status_t vmm_alloc_physical(vmm_aspace_t *aspace, const char *name, size_t size,
     if (!IS_PAGE_ALIGNED(paddr) || !IS_PAGE_ALIGNED(size))
         return ERR_INVALID_ARGS;
 
-    vaddr_t vaddr = 0;
-
     /* if they're asking for a specific spot, copy the address */
     if (vmm_flags & VMM_FLAG_VALLOC_SPECIFIC) {
         /* can't ask for a specific spot and then not provide one */
@@ -375,7 +373,7 @@ status_t vmm_alloc_physical(vmm_aspace_t *aspace, const char *name, size_t size,
     mutex_acquire(&vmm_lock);
 
     /* allocate a region and put it in the aspace list */
-    vmm_region_t *r = alloc_region(aspace, name, size, vaddr, align_log2, vmm_flags, VMM_REGION_FLAG_PHYSICAL, arch_mmu_flags);
+    r = alloc_region(aspace, name, size, vaddr, align_log2, vmm_flags, VMM_REGION_FLAG_PHYSICAL, arch_mmu_flags);
     if (!r) {
         ret = ERR_NO_MEMORY;
         goto err_alloc_region;
@@ -386,7 +384,7 @@ status_t vmm_alloc_physical(vmm_aspace_t *aspace, const char *name, size_t size,
         *ptr = (void *)r->base;
 
     /* map all of the pages */
-    int err = arch_mmu_map(r->base, paddr, size / PAGE_SIZE, arch_mmu_flags);
+    err = arch_mmu_map(r->base, paddr, size / PAGE_SIZE, arch_mmu_flags);
     LTRACEF("arch_mmu_map returns %d\n", err);
 
     ret = NO_ERROR;
@@ -399,6 +397,11 @@ err_alloc_region:
 status_t vmm_alloc_contiguous(vmm_aspace_t *aspace, const char *name, size_t size, void **ptr, uint8_t align_pow2, uint vmm_flags, uint arch_mmu_flags)
 {
     status_t err = NO_ERROR;
+    paddr_t pa = 0;
+    vaddr_t vaddr = 0;
+    uint count = 0;
+    vmm_region_t *r = NULL;
+    vm_page_t *p = NULL;
 
     LTRACEF("aspace %p name '%s' size 0x%zx ptr %p align %hhu vmm_flags 0x%x arch_mmu_flags 0x%x\n",
             aspace, name, size, ptr ? *ptr : 0, align_pow2, vmm_flags, arch_mmu_flags);
@@ -411,8 +414,6 @@ status_t vmm_alloc_contiguous(vmm_aspace_t *aspace, const char *name, size_t siz
 
     if (!name)
         name = "";
-
-    vaddr_t vaddr = 0;
 
     /* if they're asking for a specific spot, copy the address */
     if (vmm_flags & VMM_FLAG_VALLOC_SPECIFIC) {
@@ -428,9 +429,8 @@ status_t vmm_alloc_contiguous(vmm_aspace_t *aspace, const char *name, size_t siz
     struct list_node page_list;
     list_initialize(&page_list);
 
-    paddr_t pa = 0;
     /* allocate a run of physical pages */
-    uint count = pmm_alloc_contiguous(size / PAGE_SIZE, align_pow2, &pa, &page_list);
+    count = pmm_alloc_contiguous(size / PAGE_SIZE, align_pow2, &pa, &page_list);
     if (count < size / PAGE_SIZE) {
         err = ERR_NO_MEMORY;
         goto err;
@@ -439,7 +439,7 @@ status_t vmm_alloc_contiguous(vmm_aspace_t *aspace, const char *name, size_t siz
     mutex_acquire(&vmm_lock);
 
     /* allocate a region and put it in the aspace list */
-    vmm_region_t *r = alloc_region(aspace, name, size, vaddr, align_pow2, vmm_flags, VMM_REGION_FLAG_PHYSICAL, arch_mmu_flags);
+    r = alloc_region(aspace, name, size, vaddr, align_pow2, vmm_flags, VMM_REGION_FLAG_PHYSICAL, arch_mmu_flags);
     if (!r) {
         err = ERR_NO_MEMORY;
         goto err1;
@@ -453,7 +453,6 @@ status_t vmm_alloc_contiguous(vmm_aspace_t *aspace, const char *name, size_t siz
     arch_mmu_map(r->base, pa, size / PAGE_SIZE, arch_mmu_flags);
     // XXX deal with error mapping here
 
-    vm_page_t *p;
     while ((p = list_remove_head_type(&page_list, vm_page_t, node))) {
         list_add_tail(&r->page_list, &p->node);
     }
@@ -471,6 +470,11 @@ err:
 status_t vmm_alloc(vmm_aspace_t *aspace, const char *name, size_t size, void **ptr, uint8_t align_pow2, uint vmm_flags, uint arch_mmu_flags)
 {
     status_t err = NO_ERROR;
+    vaddr_t vaddr = 0;
+    uint count = 0;
+    vmm_region_t *r = NULL;
+    vm_page_t *p = NULL;
+    vaddr_t va = 0;
 
     LTRACEF("aspace %p name '%s' size 0x%zx ptr %p align %hhu vmm_flags 0x%x arch_mmu_flags 0x%x\n",
             aspace, name, size, ptr ? *ptr : 0, align_pow2, vmm_flags, arch_mmu_flags);
@@ -483,8 +487,6 @@ status_t vmm_alloc(vmm_aspace_t *aspace, const char *name, size_t size, void **p
 
     if (!name)
         name = "";
-
-    vaddr_t vaddr = 0;
 
     /* if they're asking for a specific spot, copy the address */
     if (vmm_flags & VMM_FLAG_VALLOC_SPECIFIC) {
@@ -502,7 +504,7 @@ status_t vmm_alloc(vmm_aspace_t *aspace, const char *name, size_t size, void **p
     struct list_node page_list;
     list_initialize(&page_list);
 
-    uint count = pmm_alloc_pages(size / PAGE_SIZE, &page_list);
+    count = pmm_alloc_pages(size / PAGE_SIZE, &page_list);
     DEBUG_ASSERT(count <= size);
     if (count < size / PAGE_SIZE) {
         LTRACEF("failed to allocate enough pages (asked for %zu, got %u)\n", size / PAGE_SIZE, count);
@@ -513,7 +515,7 @@ status_t vmm_alloc(vmm_aspace_t *aspace, const char *name, size_t size, void **p
     mutex_acquire(&vmm_lock);
 
     /* allocate a region and put it in the aspace list */
-    vmm_region_t *r = alloc_region(aspace, name, size, vaddr, align_pow2, vmm_flags, VMM_REGION_FLAG_PHYSICAL, arch_mmu_flags);
+    r = alloc_region(aspace, name, size, vaddr, align_pow2, vmm_flags, VMM_REGION_FLAG_PHYSICAL, arch_mmu_flags);
     if (!r) {
         err = ERR_NO_MEMORY;
         goto err1;
@@ -525,8 +527,8 @@ status_t vmm_alloc(vmm_aspace_t *aspace, const char *name, size_t size, void **p
 
     /* map all of the pages */
     /* XXX use smarter algorithm that tries to build runs */
-    vm_page_t *p;
-    vaddr_t va = r->base;
+
+    va = r->base;
     DEBUG_ASSERT(IS_PAGE_ALIGNED(va));
     while ((p = list_remove_head_type(&page_list, vm_page_t, node))) {
         DEBUG_ASSERT(va <= r->base + r->size - 1);
@@ -597,6 +599,7 @@ status_t vmm_free_region(vmm_aspace_t *aspace, vaddr_t vaddr)
     return NO_ERROR;
 }
 
+#if WITH_LIB_CONSOLE
 static void dump_region(const vmm_region_t *r)
 {
     printf("\tregion %p: name '%s' range 0x%lx - 0x%lx size 0x%zx flags 0x%x mmu_flags 0x%x\n",
@@ -665,4 +668,5 @@ STATIC_COMMAND_START
 STATIC_COMMAND("vmm", "virtual memory manager", &cmd_vmm)
 #endif
 STATIC_COMMAND_END(vmm);
+#endif /* WITH_LIB_CONSOLE */
 

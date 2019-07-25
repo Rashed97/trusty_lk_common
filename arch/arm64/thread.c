@@ -83,6 +83,10 @@ void arch_thread_initialize(thread_t *t)
     memset(frame, 0, sizeof(*frame));
     frame->lr = (vaddr_t)&initial_thread_func;
 
+    /* Set this to enable OS stack traces on exceptions */
+    extern vaddr_t arch_stack_trace_epoch;
+    arch_stack_trace_epoch = (vaddr_t)&initial_thread_func;
+
     // set the stack pointer
     t->arch.sp = (vaddr_t)frame;
 }

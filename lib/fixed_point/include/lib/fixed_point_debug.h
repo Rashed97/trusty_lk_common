@@ -23,7 +23,7 @@
 
 #pragma once
 
-static const char *
+static inline const char *
 fpd_shift_prefix_32(int shift)
 {
     switch(shift) {
@@ -40,7 +40,7 @@ fpd_shift_prefix_32(int shift)
     }
 }
 
-static const char *
+static inline const char *
 fpd_shift_prefix_64(int shift)
 {
     switch(shift) {
@@ -57,7 +57,7 @@ fpd_shift_prefix_64(int shift)
     }
 }
 
-static const char *
+static inline const char *
 fpd_shift_suffix(int shift)
 {
     switch(shift) {
@@ -74,7 +74,7 @@ fpd_shift_suffix(int shift)
     }
 }
 
-static void
+static inline void
 debug_mul_u32_u32(uint32_t a, uint32_t b, int a_shift, int b_shift, uint64_t ret)
 {
 #if DEBUG_FIXED_POINT
@@ -89,7 +89,7 @@ debug_mul_u32_u32(uint32_t a, uint32_t b, int a_shift, int b_shift, uint64_t ret
 #endif
 }
 
-static void
+static inline void
 debug_u64_mul_u32_fp32_64(uint32_t a, struct fp_32_64 b, uint64_t res_0, uint32_t res_l32_32, uint64_t ret)
 {
 #if DEBUG_FIXED_POINT
@@ -104,7 +104,7 @@ debug_u64_mul_u32_fp32_64(uint32_t a, struct fp_32_64 b, uint64_t res_0, uint32_
 #endif
 }
 
-static void
+static inline void
 debug_u32_mul_u64_fp32_64(uint64_t a, struct fp_32_64 b, uint64_t res_l32, uint32_t ret)
 {
 #if DEBUG_FIXED_POINT
@@ -119,7 +119,7 @@ debug_u32_mul_u64_fp32_64(uint64_t a, struct fp_32_64 b, uint64_t res_l32, uint3
 #endif
 }
 
-static void
+static inline void
 debug_u64_mul_u64_fp32_64(uint64_t a, struct fp_32_64 b, uint64_t res_0, uint32_t res_l32_32, uint64_t ret)
 {
 #if DEBUG_FIXED_POINT

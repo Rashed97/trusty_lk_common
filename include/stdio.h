@@ -48,7 +48,7 @@ FILE *fopen(const char *filename, const char *mode);
 int fclose(FILE *stream);
 size_t fread(void *ptr, size_t size, size_t count, FILE *stream);
 size_t fwrite(const void *ptr, size_t size, size_t count, FILE *stream);
-int fflush(FILE *stream);
+static inline int fflush(FILE *stream) { (void)stream; return 0; }
 int feof(FILE *stream);
 
 #define SEEK_SET 0
@@ -72,7 +72,11 @@ int fprintf(FILE *fp, const char *fmt, ...) __PRINTFLIKE(2, 3);
 int vfprintf(FILE *fp, const char *fmt, va_list ap);
 
 // sccanf is not implemented.
-int sscanf(const char* str, const char* format, ...);
+static inline int sscanf(const char *str, const char *format, ...) {
+	(void)str;
+	(void)format;
+	return 0;
+}
 
 __END_CDECLS
 

@@ -45,12 +45,28 @@ static int atomic_or(volatile int *ptr, int val);
 
 static uint32_t arch_cycle_count(void);
 
-static uint arch_curr_cpu_num(void);
+uint arch_curr_cpu_num(void);
 
 /* Use to align structures on cache lines to avoid cpu aliasing. */
 #define __CPU_ALIGN __ALIGNED(CACHE_LINE)
 
 #endif // !ASSEMBLY
+/* data cache operations */
+#define DCISW		0	/* invalidate data cache */
+#define DCCISW		1	/* clean-invalidate data cache */
+#define DCCSW		2	/* clean data cache */
+
+/* CLIDR definitions */
+#define LOUIS_SHIFT             21
+#define LOC_SHIFT               24
+#define CLIDR_FIELD_WIDTH       3
+
+/* CSSELR definitions */
+#define LEVEL_SHIFT             1
+#define DCACHE_LEVEL_1          1
+#define DCACHE_LEVEL_2          2
+#define DCACHE_LEVEL_3          3
+
 #define ICACHE 1
 #define DCACHE 2
 #define UCACHE (ICACHE|DCACHE)
@@ -63,7 +79,7 @@ void arch_clean_cache_range(addr_t start, size_t len);
 void arch_clean_invalidate_cache_range(addr_t start, size_t len);
 void arch_invalidate_cache_range(addr_t start, size_t len);
 void arch_sync_cache_range(addr_t start, size_t len);
-
+void arch_clean_dcache(uint32_t level);
 void arch_idle(void);
 
 __END_CDECLS

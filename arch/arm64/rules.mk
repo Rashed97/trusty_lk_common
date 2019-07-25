@@ -20,6 +20,8 @@ MODULE_SRCS += \
 	$(LOCAL_DIR)/spinlock.S \
 	$(LOCAL_DIR)/start.S \
 	$(LOCAL_DIR)/cache-ops.S \
+	$(LOCAL_DIR)/cache_helpers.S \
+	$(LOCAL_DIR)/stacktrace.c \
 
 #	$(LOCAL_DIR)/arm/start.S \
 	$(LOCAL_DIR)/arm/cache.c \

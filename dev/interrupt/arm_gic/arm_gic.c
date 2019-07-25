@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2012-2014 Travis Geiselbrecht
+ * Copyright (c) 2017-2018, NVIDIA Corporation. All rights reserved
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files
@@ -38,8 +39,11 @@
 #include <lib/sm.h>
 #include <lib/sm/sm_err.h>
 #endif
+#include <platform/speculation_barrier.h>
 
 #define LOCAL_TRACE 0
+
+struct arm_iframe;
 
 static status_t arm_gic_set_secure_locked(u_int irq, bool secure);
 
@@ -63,18 +67,21 @@ static bool arm_gic_interrupt_change_allowed(int irq)
 	return false;
 }
 
+#if !DISABLE_ARM_GIC_SUSPEND_RESUME
 static void suspend_resume_fiq(bool resume_gicc, bool resume_gicd);
+#endif
 #else
 static bool arm_gic_interrupt_change_allowed(int irq)
 {
 	return true;
 }
 
+#if !DISABLE_ARM_GIC_SUSPEND_RESUME
 static void suspend_resume_fiq(bool resume_gicc, bool resume_gicd)
 {
 }
 #endif
-
+#endif
 
 struct int_handler_struct {
 	int_handler handler;
@@ -190,6 +197,7 @@ LK_INIT_HOOK_FLAGS(arm_gic_init_percpu,
        arm_gic_init_percpu,
        LK_INIT_LEVEL_PLATFORM_EARLY, LK_INIT_FLAG_SECONDARY_CPUS);
 
+#if !DISABLE_ARM_GIC_SUSPEND_RESUME
 static void arm_gic_suspend_cpu(uint level)
 {
 	suspend_resume_fiq(false, false);
@@ -217,6 +225,7 @@ static void arm_gic_resume_cpu(uint level)
 
 LK_INIT_HOOK_FLAGS(arm_gic_resume_cpu, arm_gic_resume_cpu,
 		LK_INIT_LEVEL_PLATFORM, LK_INIT_FLAG_CPU_RESUME);
+#endif
 
 static int arm_gic_max_cpu(void)
 {
@@ -357,6 +366,7 @@ status_t unmask_interrupt(unsigned int vector)
 	return NO_ERROR;
 }
 
+#if !WITH_LIB_SM
 static
 enum handler_return __platform_irq(struct arm_iframe *frame)
 {
@@ -374,7 +384,7 @@ enum handler_return __platform_irq(struct arm_iframe *frame)
 
 	uint cpu = arch_curr_cpu_num();
 
-//	printf("platform_irq: iar 0x%x cpu %u spsr 0x%x, pc 0x%x, currthread %p, vector %d\n",
+//	printf("__platform_irq: iar 0x%x cpu %u spsr 0x%x, pc 0x%x, currthread %p, vector %d\n",
 //			iar, cpu, frame->spsr, frame->pc, get_current_thread(), vector);
 
 	// deliver the interrupt
@@ -387,12 +397,13 @@ enum handler_return __platform_irq(struct arm_iframe *frame)
 
 	GICREG(0, GICC_EOIR) = iar;
 
-//	printf("platform_irq: cpu %u exit %d\n", cpu, ret);
+//	printf("__platform_irq: cpu %u exit %d\n", cpu, ret);
 
 	KEVLOG_IRQ_EXIT(vector);
 
 	return ret;
 }
+#endif /* !WITH_LIB_SM */
 
 enum handler_return platform_irq(struct arm_iframe *frame)
 {
@@ -546,6 +557,7 @@ static bool update_fiq_targets(u_int cpu, bool enable, u_int triggered_fiq, bool
 	return ret;
 }
 
+#if !DISABLE_ARM_GIC_SUSPEND_RESUME
 static void suspend_resume_fiq(bool resume_gicc, bool resume_gicd)
 {
 	u_int cpu = arch_curr_cpu_num();
@@ -554,6 +566,7 @@ static void suspend_resume_fiq(bool resume_gicc, bool resume_gicd)
 
 	update_fiq_targets(cpu, resume_gicc, ~0, resume_gicd);
 }
+#endif
 
 status_t sm_intc_fiq_enter(void)
 {
@@ -603,5 +616,53 @@ void sm_intc_fiq_exit(void)
 	current_fiq[cpu] = 0x3ff;
 }
 #endif
+
+/**
+ * @brief This function simulates IRQ handling in the case of hypervisor.
+ *        In virtualization case, hypervisor is the owner of all
+ *        physical interrupts. For the nanosleep use case, trusty cares about
+ *        secure timer irq ID29 in order to wake up the sleeping thread.
+ *        This function is called by hypervisor from its ISR routine for
+ *        secure timer irq in order to notify trusty that the timer has
+ *        expired.
+ *        The body of this function is a mimic of irq_exception routine in
+ *        arch/arm64/exceptions.S
+ */
+status_t arm_gic_sim_irq_handler(u_int irq)
+{
+	status_t ret = NO_ERROR;
+#if WITH_LIB_SM
+	uint cpu = arch_curr_cpu_num();
+	struct int_handler_struct *h;
+	spin_lock_saved_state_t state;
+
+	LTRACEF("irq: %u cpu: %u\n", irq, cpu);
+
+	if (irq >= MAX_INT) {
+		TRACEF("Interrupt out of range: vector = %u, MAX_INT = %u\n",
+			irq, MAX_INT);
+		return ERR_INVALID_ARGS;
+	}
+
+	/* Barrier against speculatively loading int_handler_struct addresses */
+	platform_arch_speculation_barrier();
+
+	spin_lock_save(&gicd_lock, &state, GICD_LOCK_FLAGS);
+	if ((h = get_int_handler(irq, cpu))->handler != NULL) {
+		if (h->handler(h->arg) == INT_RESCHEDULE) {
+			    spin_unlock_restore(&gicd_lock, state, GICD_LOCK_FLAGS);
+			    thread_preempt();
+			    spin_lock_save(&gicd_lock, &state, GICD_LOCK_FLAGS);
+		}
+	} else {
+		TRACEF("interrupt handler not found. irq: %u\n", irq);
+		ret = ERR_NOT_FOUND;
+	}
+	spin_unlock_restore(&gicd_lock, state, GICD_LOCK_FLAGS);
+#else
+	ret = ERR_NOT_SUPPORTED;
+#endif
+	return ret;
+}
 
 /* vim: set ts=4 sw=4 noexpandtab: */

@@ -27,6 +27,8 @@
 
 .text
 
+.weak arch_sync_cache_range
+
 .macro cache_range_op, cache op
     add     x2, x0, x1                  // calculate the end address
     bic     x3, x0, #(CACHE_LINE-1)     // align the start with a cache line
@@ -57,4 +59,12 @@ FUNCTION(arch_invalidate_cache_range)
 FUNCTION(arch_sync_cache_range)
     cache_range_op dc cvau         // clean dcache to PoU by MVA
     cache_range_op ic ivau         // invalidate icache to PoU by MVA
+    ret
+
+FUNCTION(arch_clean_dcache)
+    mrs x9, clidr_el1
+    lsl x3, x0, #LEVEL_SHIFT
+    sub x10, x3, #2
+    mov x0, #DCCSW
+    bl do_dcsw_op
     ret

@@ -33,6 +33,8 @@ enum lk_init_flags {
     LK_INIT_FLAG_ALL_CPUS        = LK_INIT_FLAG_PRIMARY_CPU | LK_INIT_FLAG_SECONDARY_CPUS,
     LK_INIT_FLAG_CPU_SUSPEND     = 0x4,
     LK_INIT_FLAG_CPU_RESUME      = 0x8,
+    LK_INIT_FLAG_SYSTEM_SUSPEND  = 0x10,
+    LK_INIT_FLAG_SYSTEM_RESUME   = 0x20,
 };
 
 void lk_init_level(enum lk_init_flags flags, uint start_level, uint stop_level);

@@ -109,86 +109,6 @@ struct alloc_struct_begin {
 
 static ssize_t heap_grow(size_t len);
 
-static void dump_free_chunk(struct free_heap_chunk *chunk)
-{
-	dprintf(INFO, "\t\tbase %p, end 0x%lx, len 0x%zx\n", chunk, (vaddr_t)chunk + chunk->len, chunk->len);
-}
-
-static void heap_dump(void)
-{
-	dprintf(INFO, "Heap dump:\n");
-	dprintf(INFO, "\tbase %p, len 0x%zx\n", theheap.base, theheap.len);
-	dprintf(INFO, "\tfree list:\n");
-
-	mutex_acquire(&theheap.lock);
-
-	struct free_heap_chunk *chunk;
-	list_for_every_entry(&theheap.free_list, chunk, struct free_heap_chunk, node) {
-		dump_free_chunk(chunk);
-	}
-	mutex_release(&theheap.lock);
-
-	dprintf(INFO, "\tdelayed free list:\n");
-	spin_lock_saved_state_t state;
-	spin_lock_irqsave(&theheap.delayed_free_lock, state);
-	list_for_every_entry(&theheap.delayed_free_list, chunk, struct free_heap_chunk, node) {
-		dump_free_chunk(chunk);
-	}
-	spin_unlock_irqrestore(&theheap.delayed_free_lock, state);
-}
-
-static void heap_test(void)
-{
-	void *ptr[16];
-
-	ptr[0] = heap_alloc(8, 0);
-	ptr[1] = heap_alloc(32, 0);
-	ptr[2] = heap_alloc(7, 0);
-	ptr[3] = heap_alloc(0, 0);
-	ptr[4] = heap_alloc(98713, 0);
-	ptr[5] = heap_alloc(16, 0);
-
-	heap_free(ptr[5]);
-	heap_free(ptr[1]);
-	heap_free(ptr[3]);
-	heap_free(ptr[0]);
-	heap_free(ptr[4]);
-	heap_free(ptr[2]);
-
-	heap_dump();
-
-	int i;
-	for (i=0; i < 16; i++)
-		ptr[i] = 0;
-
-	for (i=0; i < 32768; i++) {
-		unsigned int index = (unsigned int)rand() % 16;
-
-		if ((i % (16*1024)) == 0)
-			printf("pass %d\n", i);
-
-//		printf("index 0x%x\n", index);
-		if (ptr[index]) {
-//			printf("freeing ptr[0x%x] = %p\n", index, ptr[index]);
-			heap_free(ptr[index]);
-			ptr[index] = 0;
-		}
-		unsigned int align = 1 << ((unsigned int)rand() % 8);
-		ptr[index] = heap_alloc((unsigned int)rand() % 32768, align);
-//		printf("ptr[0x%x] = %p, align 0x%x\n", index, ptr[index], align);
-
-		DEBUG_ASSERT(((addr_t)ptr[index] % align) == 0);
-//		heap_dump();
-	}
-
-	for (i=0; i < 16; i++) {
-		if (ptr[i])
-			heap_free(ptr[i]);
-	}
-
-	heap_dump();
-}
-
 // try to insert this free chunk into the free list, consuming the chunk by merging it with
 // nearby ones if possible. Returns base of whatever chunk it became in the list.
 static struct free_heap_chunk *heap_insert_free_chunk(struct free_heap_chunk *chunk)
@@ -579,6 +499,87 @@ void heap_add_block(void *ptr, size_t len)
 }
 
 #if LK_DEBUGLEVEL > 1
+
+static void dump_free_chunk(struct free_heap_chunk *chunk)
+{
+	dprintf(INFO, "\t\tbase %p, end 0x%lx, len 0x%zx\n", chunk, (vaddr_t)chunk + chunk->len, chunk->len);
+}
+
+static void heap_dump(void)
+{
+	dprintf(INFO, "Heap dump:\n");
+	dprintf(INFO, "\tbase %p, len 0x%zx\n", theheap.base, theheap.len);
+	dprintf(INFO, "\tfree list:\n");
+
+	mutex_acquire(&theheap.lock);
+
+	struct free_heap_chunk *chunk;
+	list_for_every_entry(&theheap.free_list, chunk, struct free_heap_chunk, node) {
+		dump_free_chunk(chunk);
+	}
+	mutex_release(&theheap.lock);
+
+	dprintf(INFO, "\tdelayed free list:\n");
+	spin_lock_saved_state_t state;
+	spin_lock_irqsave(&theheap.delayed_free_lock, state);
+	list_for_every_entry(&theheap.delayed_free_list, chunk, struct free_heap_chunk, node) {
+		dump_free_chunk(chunk);
+	}
+	spin_unlock_irqrestore(&theheap.delayed_free_lock, state);
+}
+
+static void heap_test(void)
+{
+	void *ptr[16];
+
+	ptr[0] = heap_alloc(8, 0);
+	ptr[1] = heap_alloc(32, 0);
+	ptr[2] = heap_alloc(7, 0);
+	ptr[3] = heap_alloc(0, 0);
+	ptr[4] = heap_alloc(98713, 0);
+	ptr[5] = heap_alloc(16, 0);
+
+	heap_free(ptr[5]);
+	heap_free(ptr[1]);
+	heap_free(ptr[3]);
+	heap_free(ptr[0]);
+	heap_free(ptr[4]);
+	heap_free(ptr[2]);
+
+	heap_dump();
+
+	int i;
+	for (i=0; i < 16; i++)
+		ptr[i] = 0;
+
+	for (i=0; i < 32768; i++) {
+		unsigned int index = (unsigned int)rand() % 16;
+
+		if ((i % (16*1024)) == 0)
+			printf("pass %d\n", i);
+
+//		printf("index 0x%x\n", index);
+		if (ptr[index]) {
+//			printf("freeing ptr[0x%x] = %p\n", index, ptr[index]);
+			heap_free(ptr[index]);
+			ptr[index] = 0;
+		}
+		unsigned int align = 1 << ((unsigned int)rand() % 8);
+		ptr[index] = heap_alloc((unsigned int)rand() % 32768, align);
+//		printf("ptr[0x%x] = %p, align 0x%x\n", index, ptr[index], align);
+
+		DEBUG_ASSERT(((addr_t)ptr[index] % align) == 0);
+//		heap_dump();
+	}
+
+	for (i=0; i < 16; i++) {
+		if (ptr[i])
+			heap_free(ptr[i]);
+	}
+
+	heap_dump();
+}
+
 #if WITH_LIB_CONSOLE
 
 #include <lib/console.h>

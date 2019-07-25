@@ -46,6 +46,10 @@ typedef enum {
     HALT_REASON_SW_UPDATE,      // SW triggered reboot in order to begin firmware update
 } platform_halt_reason;
 
+struct dt_configs {
+	bool has_dsi_panel;
+};
+
 lk_time_t current_time(void);
 lk_bigtime_t current_time_hires(void);
 
@@ -54,6 +58,9 @@ void platform_early_init(void);
 
 /* later init, after the kernel has come up */
 void platform_init(void);
+
+/* platform boostrap epilog, for enabling platforms to do cleanups */
+void platform_bootstrap_epilog(void);
 
 /* called by the arch init code to get the platform to set up any mmu mappings it may need */
 void platform_init_mmu_mappings(void);
@@ -81,5 +88,8 @@ void platform_halt(platform_halt_action suggested_action,
 
 /* called during chain loading to make sure drivers and platform is put into a stopped state */
 void platform_quiesce(void);
+uint plat_arch_curr_cpu_num(void);
 
+/* last function during the trusty bootloader setup process */
+void platform_app_bootloader_epilog(void);
 #endif

@@ -341,6 +341,7 @@ retry:
     return 0;
 }
 
+#if WITH_LIB_CONSOLE
 static void dump_page(const vm_page_t *page)
 {
     printf("page %p: address 0x%lx flags 0x%x\n", page, page_to_address(page), page->flags);
@@ -486,7 +487,7 @@ STATIC_COMMAND_START
 STATIC_COMMAND("pmm", "physical memory manager", &cmd_pmm)
 #endif
 STATIC_COMMAND_END(pmm);
-
+#endif /* WITH_LIB_CONSOLE */
 
 
 

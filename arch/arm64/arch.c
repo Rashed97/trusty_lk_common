@@ -39,6 +39,12 @@
 static spin_lock_t arm_boot_cpu_lock = 1;
 static volatile int secondaries_to_init = 0;
 #endif
+/* NV: Move this function from arch\arm64\include\arch\arch_ops.h */
+inline uint arch_curr_cpu_num(void)
+{
+    /* NV: Define plat_arch_curr_cpu_num in platform code */
+    return plat_arch_curr_cpu_num();
+}
 
 static void arm64_cpu_early_init(void)
 {

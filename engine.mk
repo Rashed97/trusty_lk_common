@@ -42,7 +42,7 @@ $(error No project specified.  Use "make projectname" or put "PROJECT := project
 endif
 endif
 
-DEBUG ?= 2
+DEBUG_LVL ?= 2
 
 BUILDDIR := $(BUILDROOT)/build-$(PROJECT)
 OUTBIN := $(BUILDDIR)/lk.bin
@@ -52,9 +52,14 @@ CONFIGHEADER := $(BUILDDIR)/config.h
 GLOBAL_INCLUDES := $(BUILDDIR) $(addsuffix /include,$(LKINC))
 GLOBAL_OPTFLAGS ?= $(ARCH_OPTFLAGS)
 GLOBAL_COMPILEFLAGS := -g -fno-builtin -finline -include $(CONFIGHEADER)
-GLOBAL_COMPILEFLAGS += -W -Wall -Wno-multichar -Wno-unused-parameter -Wno-unused-function -Wno-unused-label
+GLOBAL_COMPILEFLAGS += -W -Wall -Wno-multichar -Wno-unused-parameter -Wno-nonnull-compare
+# Some L4T toolchains do not support the stack-protector feature
+ifeq ($(filter l4t%, $(TRUSTY_VARIANT)),)
+GLOBAL_COMPILEFLAGS += -fstack-protector
+endif
 GLOBAL_CFLAGS := --std=gnu99 -Werror-implicit-function-declaration -Wstrict-prototypes -Wwrite-strings
-#GLOBAL_CFLAGS += -Werror
+GLOBAL_CFLAGS += -Wextra -Wformat -Wformat-security -Wunused-function
+GLOBAL_CFLAGS += -Werror
 GLOBAL_CPPFLAGS := -fno-exceptions -fno-rtti -fno-threadsafe-statics
 #GLOBAL_CPPFLAGS += -Weffc++
 GLOBAL_ASMFLAGS := -DASSEMBLY
@@ -69,7 +74,7 @@ ARCH_CPPFLAGS :=
 ARCH_ASMFLAGS :=
 
 # top level rule
-all:: $(OUTBIN) $(OUTELF).lst $(OUTELF).debug.lst $(OUTELF).sym $(OUTELF).sym.sorted $(OUTELF).size $(OUTELF).dump
+all:: $(OUTBIN) $(OUTELF).lst $(OUTELF).debug.lst $(OUTELF).sym $(OUTELF).sym.sorted $(OUTELF).size
 
 # master module object list
 ALLOBJS_MODULE :=
@@ -111,11 +116,11 @@ EXTRA_CLEANDEPS :=
 # any objects you put here get linked with the final image
 EXTRA_OBJS :=
 
-# any extra linker scripts to be put on the command line
-EXTRA_LINKER_SCRIPTS :=
-
 # if someone defines this, the build id will be pulled into lib/version
 BUILDID ?=
+
+# if someone defines this, the build timestamp will be pulled into lib/version
+BUILDTIMESTAMP ?=
 
 # comment out or override if you want to see the full output of each command
 NOECHO ?= @
@@ -155,12 +160,13 @@ GLOBAL_DEFINES += \
 	PLATFORM=\"$(PLATFORM)\" \
 	ARCH_$(ARCH)=1 \
 	ARCH=\"$(ARCH)\" \
+	DEBUG=$(DEBUG) \
 	$(addsuffix =1,$(addprefix WITH_,$(ALLMODULES)))
 
 # debug build?
-ifneq ($(DEBUG),)
+ifneq ($(DEBUG_LVL),)
 GLOBAL_DEFINES += \
-	LK_DEBUGLEVEL=$(DEBUG)
+	LK_DEBUGLEVEL=$(DEBUG_LVL)
 endif
 
 # allow additional defines from outside the build system
@@ -235,7 +241,7 @@ $(info GLOBAL_OPTFLAGS = $(GLOBAL_OPTFLAGS))
 $(ALLOBJS): $(GLOBAL_SRCDEPS)
 
 clean: $(EXTRA_CLEANDEPS)
-	rm -f $(ALLOBJS) $(DEPS) $(GENERATED) $(OUTBIN) $(OUTELF) $(OUTELF).lst $(OUTELF).debug.lst $(OUTELF).sym $(OUTELF).sym.sorted $(OUTELF).size $(OUTELF).hex $(OUTELF).dump
+	rm -f $(ALLOBJS) $(DEPS) $(GENERATED) $(OUTBIN) $(OUTELF) $(OUTELF).lst $(OUTELF).debug.lst $(OUTELF).sym $(OUTELF).sym.sorted $(OUTELF).size $(OUTELF).hex
 
 install: all
 	scp $(OUTBIN) 192.168.0.4:/tftproot

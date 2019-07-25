@@ -32,6 +32,7 @@
 #include <arch.h>
 #include <platform.h>
 #include <target.h>
+#include <boot_profiler.h>
 #include <lib/heap.h>
 #include <kernel/mutex.h>
 #include <kernel/thread.h>
@@ -52,6 +53,18 @@ static uint secondary_bootstrap_thread_count;
 #endif
 
 static int bootstrap2(void *arg);
+
+/* Structure to collect profiling timestamps from early boot */
+typedef struct {
+	uint64_t start;
+	uint64_t arch_init;
+	uint64_t platform_init;
+	uint64_t target_init;
+	uint64_t kernel_init;
+} early_tstamps_t;
+
+/* Function to copy prerecorded records */
+static void add_early_profiler_records(early_tstamps_t tstamps);
 
 extern void kernel_init(void);
 
@@ -79,20 +92,25 @@ void lk_main(ulong arg0, ulong arg1, ulong arg2, ulong arg3)
 	lk_boot_args[2] = arg2;
 	lk_boot_args[3] = arg3;
 
+	early_tstamps_t early_tstamps;
+	early_tstamps.start = tegra_boot_profiler_get_timestamp();
 	// get us into some sort of thread context
 	thread_init_early();
 
 	// early arch stuff
 	lk_primary_cpu_init_level(LK_INIT_LEVEL_EARLIEST, LK_INIT_LEVEL_ARCH_EARLY - 1);
 	arch_early_init();
+	early_tstamps.arch_init = tegra_boot_profiler_get_timestamp();
 
 	// do any super early platform initialization
 	lk_primary_cpu_init_level(LK_INIT_LEVEL_ARCH_EARLY, LK_INIT_LEVEL_PLATFORM_EARLY - 1);
 	platform_early_init();
+	early_tstamps.platform_init = tegra_boot_profiler_get_timestamp();
 
 	// do any super early target initialization
 	lk_primary_cpu_init_level(LK_INIT_LEVEL_PLATFORM_EARLY, LK_INIT_LEVEL_TARGET_EARLY - 1);
 	target_early_init();
+	early_tstamps.target_init = tegra_boot_profiler_get_timestamp();
 
 #if WITH_SMP
 	dprintf(INFO, "\nwelcome to lk/MP\n\n");
@@ -114,8 +132,13 @@ void lk_main(ulong arg0, ulong arg1, ulong arg2, ulong arg3)
 	// initialize the kernel
 	lk_primary_cpu_init_level(LK_INIT_LEVEL_HEAP, LK_INIT_LEVEL_KERNEL - 1);
 	kernel_init();
+	early_tstamps.kernel_init = tegra_boot_profiler_get_timestamp();
 
 	lk_primary_cpu_init_level(LK_INIT_LEVEL_KERNEL, LK_INIT_LEVEL_THREADING - 1);
+
+	/* Initialize boot_profiler and add early boot records */
+	tegra_boot_profiler_init(NULL);
+	add_early_profiler_records(early_tstamps);
 
 	// create a thread to complete system initialization
 	dprintf(SPEW, "creating bootstrap completion thread\n");
@@ -139,21 +162,36 @@ static int bootstrap2(void *arg)
 	dprintf(SPEW, "initializing platform\n");
 	lk_primary_cpu_init_level(LK_INIT_LEVEL_ARCH, LK_INIT_LEVEL_PLATFORM - 1);
 	platform_init();
+	tegra_boot_profiler_record("bootstrap2: platform_init done");
 
 	// initialize the target
 	dprintf(SPEW, "initializing target\n");
 	lk_primary_cpu_init_level(LK_INIT_LEVEL_PLATFORM, LK_INIT_LEVEL_TARGET - 1);
 	target_init();
+	tegra_boot_profiler_record("bootstrap2: target_init done");
 
 	dprintf(SPEW, "calling apps_init()\n");
 	lk_primary_cpu_init_level(LK_INIT_LEVEL_TARGET, LK_INIT_LEVEL_APPS - 1);
 	apps_init();
+	tegra_boot_profiler_record("bootstrap2: apps_init done");
 
 	lk_primary_cpu_init_level(LK_INIT_LEVEL_APPS, LK_INIT_LEVEL_LAST);
 
+	dprintf(SPEW, "calling platform_bootstrap_epilog\n");
+	platform_bootstrap_epilog();
+
 	return 0;
 }
+static void add_early_profiler_records(early_tstamps_t tstamp)
+{
+	/* Store pre-recorded timestamps to boot_profiler before thread creation */
+	tegra_boot_profiler_prerecorded("lk_main: start", tstamp.start);
+	tegra_boot_profiler_prerecorded("lk_main: arch_early_init", tstamp.arch_init);
+	tegra_boot_profiler_prerecorded("lk_main: platform_early_init", tstamp.platform_init);
+	tegra_boot_profiler_prerecorded("lk_main: target_early_init", tstamp.target_init);
+	tegra_boot_profiler_prerecorded("lk_main: kernel_init", tstamp.kernel_init);
 
+}
 #if WITH_SMP
 void lk_secondary_cpu_entry(void)
 {

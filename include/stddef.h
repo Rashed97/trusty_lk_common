@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2009 Corey Tabaka
- * Copyright (c) 2013 Travis Geiselbrecht
+ * Copyright (c) 2012 Travis Geiselbrecht
+ * Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files
@@ -21,58 +21,34 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+#ifndef __STDDEF_H
+#define __STDDEF_H
 
-ENTRY(_start)
-SECTIONS
-{
-	.text 0x0200000 : {
-		__code_start = .;
-		KEEP(*(.text.boot))
-		*(.text* .sram.text)
-		*(.gnu.linkonce.t.*)
-		__code_end = .;
-	} =0x9090
+#include <compiler.h> // for __offsetof()
 
-	.rodata : ALIGN(4096) {
-		__rodata_start = .;
-		*(.rodata*)
-		*(.gnu.linkonce.r.*)
-INCLUDE "arch/shared_rodata_sections.ld"
-		. = ALIGN(8);
-		__rodata_end = .;
-	}
+#define offsetof(x, y) __offsetof(x, y)
 
-	.data : ALIGN(4096) {
-		__data_start = .;
-		*(.data .data.* .gnu.linkonce.d.*)
-INCLUDE "arch/shared_data_sections.ld"
-	}
-	__ctor_list = .;
-	.ctors : { KEEP(*(.ctors)) }
-	__ctor_end = .;
-	__dtor_list = .;
-	.dtors : { KEEP(*(.dtors)) }
-	__dtor_end = .;
+typedef long ptrdiff_t;
 
-	.stab   : { *(.stab) }
-	.stabst : { *(.stabstr) }
+#if defined(__ssize_t)
+typedef __ssize_t ssize_t;
+#elif defined(__SIZE_TYPE__)
+/* Define a proper type for ssize_t (i.e. "signed size_t") which
+ *  works also with the printf %z format modifier.
+ */
+#define unsigned
+typedef __SIZE_TYPE__ ssize_t;
+#undef unsigned
+#else
+typedef long ssize_t;
+#endif
 
-	__data_end = .;
+#ifndef __SIZE_TYPE__
+#define __SIZE_TYPE__ long unsigned int
+#endif
 
-	.bss : ALIGN(4096) {
-		__bss_start = .;
-		*(.bss*)
-		*(.gnu.linkonce.b.*)
-		*(COMMON)
-		. = ALIGN(8);
-		__bss_end = .;
-	}
+typedef __SIZE_TYPE__ size_t;
 
-	_end = .;
+#define NULL 0
 
-	/* put a symbol arbitrarily 4MB past the end of the kernel */
-	/* used by the heap and other early boot time allocators */
-	_end_of_ram = . + (4*1024*1024);
-
-	/DISCARD/ : { *(.comment .note .eh_frame) }
-}
+#endif

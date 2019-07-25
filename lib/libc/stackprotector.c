@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2009 Corey Tabaka
- * Copyright (c) 2013 Travis Geiselbrecht
+ * Copyright (c) 2014-2017, NVIDIA CORPORATION. All rights reserved
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files
@@ -22,57 +21,29 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-ENTRY(_start)
-SECTIONS
+#include <rand.h>
+
+unsigned int __stack_chk_guard = 0xaff;
+
+static void __attribute__((constructor)) __guard_setup (void){
+        /* 
+         * included for future use. rand.h must be seeded and -fstack_protector must be disabled in
+         * stack contexts preceeding this call.
+         */
+  	if ( __stack_chk_guard == 0U )
+  		__stack_chk_guard = rand();
+}
+
+#define TRUSTY_LIBC_BREAK() \
+	do {								\
+		unsigned int _x = (unsigned int) __LINE__;		\
+		volatile unsigned int *_px =				\
+					(volatile unsigned int *) &_x;	\
+		while (*_px == *_px) { }				\
+	} while (1);
+
+void __attribute__((noreturn)) __stack_chk_fail(void);
+void __attribute__((noreturn)) __stack_chk_fail(void)
 {
-	.text 0x0200000 : {
-		__code_start = .;
-		KEEP(*(.text.boot))
-		*(.text* .sram.text)
-		*(.gnu.linkonce.t.*)
-		__code_end = .;
-	} =0x9090
-
-	.rodata : ALIGN(4096) {
-		__rodata_start = .;
-		*(.rodata*)
-		*(.gnu.linkonce.r.*)
-INCLUDE "arch/shared_rodata_sections.ld"
-		. = ALIGN(8);
-		__rodata_end = .;
-	}
-
-	.data : ALIGN(4096) {
-		__data_start = .;
-		*(.data .data.* .gnu.linkonce.d.*)
-INCLUDE "arch/shared_data_sections.ld"
-	}
-	__ctor_list = .;
-	.ctors : { KEEP(*(.ctors)) }
-	__ctor_end = .;
-	__dtor_list = .;
-	.dtors : { KEEP(*(.dtors)) }
-	__dtor_end = .;
-
-	.stab   : { *(.stab) }
-	.stabst : { *(.stabstr) }
-
-	__data_end = .;
-
-	.bss : ALIGN(4096) {
-		__bss_start = .;
-		*(.bss*)
-		*(.gnu.linkonce.b.*)
-		*(COMMON)
-		. = ALIGN(8);
-		__bss_end = .;
-	}
-
-	_end = .;
-
-	/* put a symbol arbitrarily 4MB past the end of the kernel */
-	/* used by the heap and other early boot time allocators */
-	_end_of_ram = . + (4*1024*1024);
-
-	/DISCARD/ : { *(.comment .note .eh_frame) }
+	TRUSTY_LIBC_BREAK()
 }

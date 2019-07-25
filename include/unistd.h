@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2009 Corey Tabaka
- * Copyright (c) 2013 Travis Geiselbrecht
+ * Copyright (c) 2016-2017, NVIDIA CORPORATION. All rights reserved
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files
@@ -21,58 +20,34 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+#ifndef __UNISTD_H
+#define __UNISTD_H
 
-ENTRY(_start)
-SECTIONS
+#include <stddef.h>
+#include <sys/types.h>
+#include <time.h>
+
+extern ssize_t read (int fd, void *__buf, size_t nbytes);
+extern ssize_t write(int fd, const void *buf, size_t nbytes);
+extern int brk(void *addr);
+extern pid_t gettid(void);
+extern void exit(int status) __NO_RETURN;
+extern int raise(int sig);
+extern void abort(void);
+extern int close(int);
+extern int nanosleep(struct timespec *req, struct timespec *rem);
+
+static inline int usleep(useconds_t usec)
 {
-	.text 0x0200000 : {
-		__code_start = .;
-		KEEP(*(.text.boot))
-		*(.text* .sram.text)
-		*(.gnu.linkonce.t.*)
-		__code_end = .;
-	} =0x9090
-
-	.rodata : ALIGN(4096) {
-		__rodata_start = .;
-		*(.rodata*)
-		*(.gnu.linkonce.r.*)
-INCLUDE "arch/shared_rodata_sections.ld"
-		. = ALIGN(8);
-		__rodata_end = .;
-	}
-
-	.data : ALIGN(4096) {
-		__data_start = .;
-		*(.data .data.* .gnu.linkonce.d.*)
-INCLUDE "arch/shared_data_sections.ld"
-	}
-	__ctor_list = .;
-	.ctors : { KEEP(*(.ctors)) }
-	__ctor_end = .;
-	__dtor_list = .;
-	.dtors : { KEEP(*(.dtors)) }
-	__dtor_end = .;
-
-	.stab   : { *(.stab) }
-	.stabst : { *(.stabstr) }
-
-	__data_end = .;
-
-	.bss : ALIGN(4096) {
-		__bss_start = .;
-		*(.bss*)
-		*(.gnu.linkonce.b.*)
-		*(COMMON)
-		. = ALIGN(8);
-		__bss_end = .;
-	}
-
-	_end = .;
-
-	/* put a symbol arbitrarily 4MB past the end of the kernel */
-	/* used by the heap and other early boot time allocators */
-	_end_of_ram = . + (4*1024*1024);
-
-	/DISCARD/ : { *(.comment .note .eh_frame) }
+   /* Explicit casts to silence warnings
+    * usec is type useconds_t, which is unsigned int
+    * tv_sec id type seconds_t, which is time_t, which is long
+    * tv_nsec is long
+    * it is always safe to cast int to long
+    */
+    struct timespec tm;
+    tm.tv_sec  = (time_t) usec / 1000000;
+    tm.tv_nsec = (long int) ((usec % 1000000) * 1000);
+    return nanosleep(&tm, NULL);
 }
+#endif

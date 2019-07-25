@@ -365,6 +365,7 @@ LK_INIT_HOOK_FLAGS(arm_generic_timer_init_secondary_cpu,
 		   arm_generic_timer_init_secondary_cpu,
 		   LK_INIT_LEVEL_THREADING - 1, LK_INIT_FLAG_SECONDARY_CPUS);
 
+#if !DISABLE_ARM_TIMER_RESUME
 static void arm_generic_timer_resume_cpu(uint level)
 {
 	/* Always trigger a timer interrupt on each cpu for now */
@@ -374,5 +375,6 @@ static void arm_generic_timer_resume_cpu(uint level)
 
 LK_INIT_HOOK_FLAGS(arm_generic_timer_resume_cpu, arm_generic_timer_resume_cpu,
 		LK_INIT_LEVEL_PLATFORM, LK_INIT_FLAG_CPU_RESUME);
+#endif
 
 /* vim: set noexpandtab: */

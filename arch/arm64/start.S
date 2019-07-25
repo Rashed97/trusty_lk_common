@@ -6,17 +6,19 @@
 /*
  * Register use:
  *  x0-x3   Arguments
- *  x9-x15  Scratch
+ *  x9-x17  Scratch
  *  x19-x28 Globals
  */
 tmp                     .req x9
 tmp2                    .req x10
 wtmp2                   .req w10
-index                   .req x11
-index_shift             .req x12
+idx                     .req x11
+idx_shift               .req x12
 page_table              .req x13
 new_page_table          .req x14
 phys_offset             .req x15
+tmp3                    .req x16
+tmp4                    .req x17
 
 cpuid                   .req x19
 page_table0             .req x20
@@ -50,8 +52,17 @@ FUNCTION(_start)
     add     page_table0, page_table0, #:lo12:tt_trampoline
 
 #if WITH_SMP
-    mrs     cpuid, mpidr_el1
-    ubfx    cpuid, cpuid, #0, #SMP_CPU_ID_BITS
+    mov     tmp, x0
+    mov     tmp2,x1
+    mov     tmp3,x2
+    mov     tmp4,x3
+    /* NV: read cpuid by arch_curr_cpu_num */
+    bl      arch_curr_cpu_num
+    mov     cpuid, x0
+    mov     x3, tmp4
+    mov     x2, tmp3
+    mov     x1, tmp2
+    mov     x0, tmp
     cbnz    cpuid, .Lmmu_enable_secondary
 #endif
 
@@ -130,40 +141,40 @@ FUNCTION(_start)
 .Lmap_range_top_loop:
     /* Select top level page table */
     mov     page_table, page_table1
-    mov     index_shift, #MMU_KERNEL_TOP_SHIFT
+    mov     idx_shift, #MMU_KERNEL_TOP_SHIFT
 
-    lsr     index, vaddr, index_shift
+    lsr     idx, vaddr, idx_shift
 
 .Lmap_range_one_table_loop:
     /* Check if current level allow block descriptors */
-    cmp     index_shift, #MMU_PTE_DESCRIPTOR_BLOCK_MAX_SHIFT
+    cmp     idx_shift, #MMU_PTE_DESCRIPTOR_BLOCK_MAX_SHIFT
     b.hi    .Lmap_range_need_page_table
 
     /* Check if paddr and vaddr alignment allows a block descriptor */
     orr     tmp2, vaddr, paddr
-    lsr     tmp, tmp2, index_shift
-    lsl     tmp, tmp, index_shift
+    lsr     tmp, tmp2, idx_shift
+    lsl     tmp, tmp, idx_shift
     cmp     tmp, tmp2
     b.ne    .Lmap_range_need_page_table
 
     /* Check if size is large enough for a block mapping */
-    lsr     tmp, size, index_shift
+    lsr     tmp, size, idx_shift
     cbz     tmp, .Lmap_range_need_page_table
 
     /* Select descriptor type, page for level 3, block for level 0-2 */
     orr     tmp, attr, #MMU_PTE_L3_DESCRIPTOR_PAGE
-    cmp     index_shift, MMU_KERNEL_PAGE_SIZE_SHIFT
+    cmp     idx_shift, MMU_KERNEL_PAGE_SIZE_SHIFT
     beq     .Lmap_range_l3
     orr     tmp, attr, #MMU_PTE_L012_DESCRIPTOR_BLOCK
 .Lmap_range_l3:
 
     /* Write page table entry */
     orr     tmp, tmp, paddr
-    str     tmp, [page_table, index, lsl #3]
+    str     tmp, [page_table, idx, lsl #3]
 
     /* Move to next page table entry */
     mov     tmp, #1
-    lsl     tmp, tmp, index_shift
+    lsl     tmp, tmp, idx_shift
     add     vaddr, vaddr, tmp
     add     paddr, paddr, tmp
     subs    size, size, tmp
@@ -181,7 +192,7 @@ FUNCTION(_start)
 
 .Lmap_range_need_page_table:
     /* Check if page table entry is unused */
-    ldr     new_page_table, [page_table, index, lsl #3]
+    ldr     new_page_table, [page_table, idx, lsl #3]
     cbnz    new_page_table, .Lmap_range_has_page_table
 
     /* Calculate phys offset (needed for memory allocation) */
@@ -195,7 +206,7 @@ FUNCTION(_start)
 
     /* Write page table entry (with allocated page table) */
     orr     new_page_table, new_page_table, #MMU_PTE_L012_DESCRIPTOR_TABLE
-    str     new_page_table, [page_table, index, lsl #3]
+    str     new_page_table, [page_table, idx, lsl #3]
 
 .Lmap_range_has_page_table:
     /* Check descriptor type */
@@ -206,10 +217,10 @@ FUNCTION(_start)
     /* switch to next page table level */
     bic     page_table, new_page_table, #MMU_PTE_DESCRIPTOR_MASK
     mov     tmp, #~0
-    lsl     tmp, tmp, index_shift
+    lsl     tmp, tmp, idx_shift
     bic     tmp, vaddr, tmp
-    sub     index_shift, index_shift, #(MMU_KERNEL_PAGE_SIZE_SHIFT - 3)
-    lsr     index, tmp, index_shift
+    sub     idx_shift, idx_shift, #(MMU_KERNEL_PAGE_SIZE_SHIFT - 3)
+    lsr     idx, tmp, idx_shift
 
     b       .Lmap_range_one_table_loop
 

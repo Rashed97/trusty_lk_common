@@ -125,6 +125,7 @@ paddr_t kvaddr_to_paddr(void *ptr)
     return pa;
 }
 
+#if WITH_LIB_CONSOLE
 static int cmd_vm(int argc, const cmd_args *argv)
 {
     if (argc < 2) {
@@ -177,6 +178,7 @@ STATIC_COMMAND_START
 STATIC_COMMAND("vm", "vm commands", &cmd_vm)
 #endif
 STATIC_COMMAND_END(vm);
+#endif /* WITH_LIB_CONSOLE */
 
 LK_INIT_HOOK(vm_preheap, &vm_init_preheap, LK_INIT_LEVEL_HEAP - 1);
 LK_INIT_HOOK(vm, &vm_init_postheap, LK_INIT_LEVEL_VM);

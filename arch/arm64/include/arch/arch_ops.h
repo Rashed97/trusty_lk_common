@@ -28,6 +28,7 @@
 #include <compiler.h>
 #include <reg.h>
 #include <arch/arm64.h>
+#include <platform.h>
 
 #define USE_GCC_ATOMICS 1
 #define ENABLE_CYCLE_COUNTER 1
@@ -65,6 +66,15 @@ static inline void arch_disable_fiqs(void)
 {
     __asm__ volatile("msr daifset, #1" ::: "memory");
     CF;
+}
+
+/* Currently not used in Arm-64 code, but needs to
+ * be present for compilation warnings (-Werror=unused-function).
+ * Declared static in lk/common/include/arch/ops.h
+ */
+static inline bool arch_in_int_handler(void)
+{
+    return 0;
 }
 
 // XXX
@@ -248,12 +258,6 @@ static inline struct thread *get_current_thread(void)
 static inline void set_current_thread(struct thread *t)
 {
     ARM64_WRITE_SYSREG(tpidr_el1, (uint64_t)t);
-}
-
-static inline uint arch_curr_cpu_num(void)
-{
-    uint64_t mpidr =  ARM64_READ_SYSREG(mpidr_el1);
-    return ((mpidr & ((1U << SMP_CPU_ID_BITS) - 1)) >> 8 << SMP_CPU_CLUSTER_SHIFT) | (mpidr & 0xff);
 }
 
 #endif // ASSEMBLY

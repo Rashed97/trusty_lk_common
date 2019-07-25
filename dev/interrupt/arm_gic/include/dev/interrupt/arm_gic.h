@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013, Google Inc. All rights reserved.
+ * Copyright (c) 2017, NVIDIA Corporation. All rights reserved
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files
@@ -38,6 +39,6 @@ enum {
 	ARM_GIC_SGI_FLAG_NS = 0x4,
 };
 status_t arm_gic_sgi(u_int irq, u_int flags, u_int cpu_mask);
-
+status_t arm_gic_sim_irq_handler(u_int irq);
 #endif
 

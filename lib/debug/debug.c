@@ -46,16 +46,20 @@ static void out_count(const char *str, size_t len)
 {
 	print_callback_t *cb;
 	size_t i;
+	int reg_logger = 0;
 
 	/* print to any registered loggers */
 	list_for_every_entry(&print_callbacks, cb, print_callback_t, entry) {
-		if (cb->print)
+		if (cb->print) {
+			reg_logger = 1;
 			cb->print(cb, str, len);
+		}
 	}
 
 	/* write out the serial port */
-	for (i = 0; i < len; i++) {
-		platform_dputc(str[i]);
+	if(!reg_logger) {
+		for (i = 0; i < len; i++)
+			platform_dputc(str[i]);
 	}
 }
 

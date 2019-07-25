@@ -52,16 +52,19 @@ SECTIONS
         KEEP(*(.rodata.fault_handler_table))
         __fault_handler_table_end = .;
         *(.rodata .rodata.* .gnu.linkonce.r.*)
+INCLUDE "arch/shared_rodata_sections.ld"
+        . = ALIGN(8);
+        __rodata_end = .;
     }
 
 
     .data : ALIGN(4096) {
-        __rodata_end = .;
         /* writable data  */
         __data_start_rom = .;
         /* in one segment binaries, the rom data address is on top of the ram data address */
         __data_start = .;
         *(.data .data.* .gnu.linkonce.d.*)
+INCLUDE "arch/shared_data_sections.ld"
     }
 
     .ctors : ALIGN(8) {
@@ -77,11 +80,10 @@ SECTIONS
     .got : { *(.got.plt) *(.got) }
     .dynamic : { *(.dynamic) }
 
+    __data_end = .;
 
     /* unintialized data (in same segment as writable data) */
     .bss : ALIGN(8) {
-        __data_end = .;
-
         KEEP(*(.bss.prebss.*))
         . = ALIGN(8);
         __bss_start = .;
